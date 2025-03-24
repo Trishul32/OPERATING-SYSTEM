@@ -1,101 +1,83 @@
 #include <stdio.h>
-#include <stdlib.h>
 
-typedef struct Process {
-    int AT, BT, CT, TAT, WT, RT, remainingBT, finished;
-} Process;
+#define MAX 100
 
-void Sort(Process p[], int n) {
-    Process temp;
-    for (int i = 0; i < n - 1; i++) {
-        for (int j = i + 1; j < n; j++) {
-            if (p[i].AT > p[j].AT) {
-                temp = p[i];
-                p[i] = p[j];
-                p[j] = temp;
-            }
-        }
-    }
-}
+void roundRobin(int n, int at[], int bt[], int quant) {
+    int ct[n], tat[n], wt[n], rem_bt[n];
+    int queue[MAX], front = 0, rear = 0;
+    int time = 0, completed = 0, visited[n];
 
-void RoundRobin(Process p[], int n, int quantum) {
-    int time = 0, completed = 0, totalTAT = 0, totalWT = 0;
-
-    // Queue for processes that need to be executed
-    int queue[n], front = 0, rear = 0;
-    
     for (int i = 0; i < n; i++) {
-        p[i].remainingBT = p[i].BT;
-        p[i].finished = 0;
+        rem_bt[i] = bt[i];
+        visited[i] = 0;
     }
+
+    queue[rear++] = 0;
+    visited[0] = 1;
 
     while (completed < n) {
-        int flag = 0;
+        int index = queue[front++];
+       
+        if (rem_bt[index] > quant) {
+            time += quant;
+            rem_bt[index] -= quant;
+        } else {
+            time += rem_bt[index];
+            rem_bt[index] = 0;
+            ct[index] = time;
+            completed++;
+        }
 
-        // Add processes to queue if they have arrived
         for (int i = 0; i < n; i++) {
-            if (p[i].AT <= time && p[i].finished == 0) {
+            if (at[i] <= time && rem_bt[i] > 0 && !visited[i]) {
                 queue[rear++] = i;
-                p[i].finished = 1; // Mark process as added to queue
+                visited[i] = 1;
             }
         }
 
-        // Process execution
-        if (front < rear) {
-            int ind = queue[front++];
-            if (p[ind].remainingBT > quantum) {
-                time += quantum;
-                p[ind].remainingBT -= quantum;
-                queue[rear++] = ind; // Put back the process in the queue
-            } else {
-                time += p[ind].remainingBT;
-                p[ind].remainingBT = 0;
-                p[ind].CT = time;
-                p[ind].TAT = p[ind].CT - p[ind].AT;
-                p[ind].WT = p[ind].TAT - p[ind].BT;
-
-                totalTAT += p[ind].TAT;
-                totalWT += p[ind].WT;
-                completed++;
-            }
-            flag = 1;
+        if (rem_bt[index] > 0) {
+            queue[rear++] = index;
         }
 
-        // If no process is executing, increment time
-        if (flag == 0) {
-            time++;
+        if (front == rear) {
+            for (int i = 0; i < n; i++) {
+                if (rem_bt[i] > 0) {
+                    queue[rear++] = i;
+                    visited[i] = 1;
+                    break;
+                }
+            }
         }
     }
 
-    // Printing the results
-    printf("Process\tAT\tBT\tCT\tTAT\tWT\tRT\n");
+    float total_tat = 0, total_wt = 0;
+    printf("P#\tAT\tBT\tCT\tTAT\tWT\n");
     for (int i = 0; i < n; i++) {
-        printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\n", i + 1, p[i].AT, p[i].BT, p[i].CT, p[i].TAT, p[i].WT, p[i].RT);
+        tat[i] = ct[i] - at[i];
+        wt[i] = tat[i] - bt[i];
+        total_tat += tat[i];
+        total_wt += wt[i];
+        printf("%d\t%d\t%d\t%d\t%d\t%d\n", i + 1, at[i], bt[i], ct[i], tat[i], wt[i]);
     }
 
-    printf("\nAverage Turnaround Time: %.2f\n", (float)totalTAT / n);
-    printf("Average Waiting Time: %.2f\n", (float)totalWT / n);
+    printf("Average TAT: %.2f\n", total_tat / n);
+    printf("Average WT: %.2f\n", total_wt / n);
 }
 
 int main() {
-    int n, quantum;
-
+    int n, quant;
     printf("Enter number of processes: ");
     scanf("%d", &n);
 
-    Process p[n];
-
+    int at[n], bt[n];
     for (int i = 0; i < n; i++) {
-        printf("Enter Arrival Time and Burst Time for Process %d: ", i + 1);
-        scanf("%d %d", &p[i].AT, &p[i].BT);
-        p[i].remainingBT = p[i].BT;
+        printf("Enter AT and BT for process %d: ", i + 1);
+        scanf("%d %d", &at[i], &bt[i]);
     }
 
-    printf("Enter the time quantum: ");
-    scanf("%d", &quantum);
+    printf("Enter time quantum: ");
+    scanf("%d", &quant);
 
-    Sort(p, n);
-    RoundRobin(p, n, quantum);
-
+    roundRobin(n, at, bt, quant);
     return 0;
 }
