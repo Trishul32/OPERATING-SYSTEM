@@ -1,81 +1,171 @@
 #include <stdio.h>
 #include <limits.h>
 
-// Structure to hold process information
 typedef struct {
-    int id, arrival, burst, completion, turnaround, waiting;
+    int id, arrival, burst, remaining, waiting, turnaround, completion, response, started;
 } Process;
 
-// Function to sort processes based on arrival time
+void swap(Process *a, Process *b) {
+    Process temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
 void sortByArrival(Process p[], int n) {
     for (int i = 0; i < n - 1; i++) {
         for (int j = 0; j < n - i - 1; j++) {
             if (p[j].arrival > p[j + 1].arrival) {
-                Process temp = p[j];
-                p[j] = p[j + 1];
-                p[j + 1] = temp;
+                swap(&p[j], &p[j + 1]);
             }
         }
     }
 }
 
-// SJF Scheduling (Non-Preemptive)
-void sjf_non_preemptive(Process p[], int n, float *avgTAT, float *avgWT) {
-    int completed = 0, time = 0, minIdx, totalTAT = 0, totalWT = 0;
-    int isCompleted[n];
-    for (int i = 0; i < n; i++) isCompleted[i] = 0;
-    
+void fcfs(Process p[], int n) {
+    sortByArrival(p, n);
+    int time = 0;
+
+    for (int i = 0; i < n; i++) {
+        if (time < p[i].arrival)
+            time = p[i].arrival;
+
+        p[i].response = time - p[i].arrival;
+        p[i].completion = time + p[i].burst;
+        p[i].turnaround = p[i].completion - p[i].arrival;
+        p[i].waiting = p[i].turnaround - p[i].burst;
+        time = p[i].completion;
+    }
+}
+
+void sjfNonPreemptive(Process p[], int n) {
+    int completed = 0, time = 0;
+
     while (completed < n) {
-        minIdx = -1;
-        int minBurst = INT_MAX;
+        int minIndex = -1, minBurst = INT_MAX;
+
         for (int i = 0; i < n; i++) {
-            if (!isCompleted[i] && p[i].arrival <= time && p[i].burst < minBurst) {
-                minBurst = p[i].burst;
-                minIdx = i;
+            if (p[i].arrival <= time && p[i].completion == 0) {
+                if (p[i].burst < minBurst || (p[i].burst == minBurst && p[i].arrival < p[minIndex].arrival)) {
+                    minBurst = p[i].burst;
+                    minIndex = i;
+                }
             }
         }
-        if (minIdx == -1) { time++; continue; }
-        
-        p[minIdx].completion = time + p[minIdx].burst;
-        p[minIdx].turnaround = p[minIdx].completion - p[minIdx].arrival;
-        p[minIdx].waiting = p[minIdx].turnaround - p[minIdx].burst;
-        time = p[minIdx].completion;
-        isCompleted[minIdx] = 1;
-        totalTAT += p[minIdx].turnaround;
-        totalWT += p[minIdx].waiting;
+
+        if (minIndex == -1) {
+            time++;
+            continue;
+        }
+
+        p[minIndex].response = time - p[minIndex].arrival;
+        time += p[minIndex].burst;
+        p[minIndex].completion = time;
+        p[minIndex].turnaround = p[minIndex].completion - p[minIndex].arrival;
+        p[minIndex].waiting = p[minIndex].turnaround - p[minIndex].burst;
         completed++;
     }
-    *avgTAT = (float)totalTAT / n;
-    *avgWT = (float)totalWT / n;
 }
 
-// Function to display results
-void display(Process p[], int n, float avgTAT, float avgWT) {
-    printf("\nPID Arrival Burst Completion Turnaround Waiting\n");
-    for (int i = 0; i < n; i++) {
-        printf("%3d %7d %6d %10d %10d %8d\n", p[i].id, p[i].arrival, p[i].burst, p[i].completion, p[i].turnaround, p[i].waiting);
+void sjfPreemptive(Process p[], int n) {
+    int completed = 0, time = 0, minIndex = -1, minBurst = INT_MAX;
+
+    while (completed < n) {
+        minIndex = -1, minBurst = INT_MAX;
+
+        for (int i = 0; i < n; i++) {
+            if (p[i].arrival <= time && p[i].remaining > 0) {
+                if (p[i].remaining < minBurst || (p[i].remaining == minBurst && p[i].arrival < p[minIndex].arrival)) {
+                    minBurst = p[i].remaining;
+                    minIndex = i;
+                }
+            }
+        }
+
+        if (minIndex == -1) {
+            time++;
+            continue;
+        }
+
+        if (p[minIndex].started == 0) {
+            p[minIndex].response = time - p[minIndex].arrival;
+            p[minIndex].started = 1;
+        }
+
+        p[minIndex].remaining--;
+        time++;
+
+        if (p[minIndex].remaining == 0) {
+            p[minIndex].completion = time;
+            p[minIndex].turnaround = p[minIndex].completion - p[minIndex].arrival;
+            p[minIndex].waiting = p[minIndex].turnaround - p[minIndex].burst;
+            completed++;
+        }
     }
-    printf("\nAverage Turnaround Time: %.2f", avgTAT);
-    printf("\nAverage Waiting Time: %.2f\n", avgWT);
+}
+
+void displayResults(Process p[], int n, const char *title) {
+    printf("\n--- %s ---\n", title);
+    printf("\nPID\tAT\tBT\tCT\tTAT\tWT\tRT\n");
+
+    float totalWT = 0, totalTAT = 0, totalRT = 0;
+    for (int i = 0; i < n; i++) {
+        printf("P%d\t%d\t%d\t%d\t%d\t%d\t%d\n", p[i].id, p[i].arrival, p[i].burst, p[i].completion, p[i].turnaround, p[i].waiting, p[i].response);
+        totalWT += p[i].waiting;
+        totalTAT += p[i].turnaround;
+        totalRT += p[i].response;
+    }
+
+    printf("Average Waiting Time: %.2f\n", totalWT / n);
+    printf("Average Turnaround Time: %.2f\n", totalTAT / n);
+    printf("Average Response Time: %.2f\n", totalRT / n);
 }
 
 int main() {
-    int n;
-    float avgTAT, avgWT;
+    int n, choice;
     printf("Enter number of processes: ");
     scanf("%d", &n);
-    Process p[n];
-    
-    printf("Enter Arrival Time and Burst Time for each process:\n");
+
+    Process p[n], temp[n];
+
+    printf("Enter Arrival Time and Burst Time:\n");
     for (int i = 0; i < n; i++) {
-        p[i].id = i + 1;
-        printf("P[%d]: ", i + 1);
+        p[i].id = i + 1; 
         scanf("%d %d", &p[i].arrival, &p[i].burst);
+        p[i].remaining = p[i].burst;
+        p[i].waiting = p[i].turnaround = p[i].completion = p[i].response = p[i].started = 0;
+        temp[i] = p[i]; // Copy for reuse
     }
-    
-    printf("\nShortest Job First (Non-Preemptive) Scheduling\n");
-    sjf_non_preemptive(p, n, &avgTAT, &avgWT);
-    display(p, n, avgTAT, avgWT);
-    
+
+    while (1) {
+        printf("\nCPU Scheduling Algorithms:\n");
+        printf("1. First Come First Serve (FCFS)\n");
+        printf("2. Shortest Job First (Non-Preemptive)\n");
+        printf("3. Shortest Job First (Preemptive)\n");
+        printf("4. Exit\n");
+        printf("Enter your choice: ");
+        scanf("%d", &choice);
+
+        for (int i = 0; i < n; i++) p[i] = temp[i]; // Restore original processes
+
+        switch (choice) {
+            case 1:
+                fcfs(p, n);
+                displayResults(p, n, "First Come First Serve (FCFS)");
+                break;
+            case 2:
+                sjfNonPreemptive(p, n);
+                displayResults(p, n, "Shortest Job First (Non-Preemptive)");
+                break;
+            case 3:
+                sjfPreemptive(p, n);
+                displayResults(p, n, "Shortest Job First (Preemptive)");
+                break;
+            case 4:
+                return 0;
+            default:
+                printf("Invalid choice! Try again.\n");
+        }
+    }
+
     return 0;
 }
